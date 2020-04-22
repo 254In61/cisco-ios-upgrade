@@ -1,0 +1,21 @@
+#!/usr/tools/pyenv/shims/ansible-playbook
+---
+#Ansible script for IOS upgrade
+- name : IOSUPGRADE
+  hosts: "all"
+  serial: 15
+  gather_facts: false
+
+  vars_prompt:
+    - name: newOS
+      prompt: "Full image filename"
+      private: no
+
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: ios
+    ansible_ssh_user: "{{ u }}"
+    ansible_ssh_pass: "{{ p }}"
+
+  roles:
+    - iosUpgrade
