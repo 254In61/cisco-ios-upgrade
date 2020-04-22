@@ -1,0 +1,31 @@
+----
+#This is the pre-implementation step.
+#!/usr/tools/pyenv/shims/ansible-playbook
+---
+#Ansible script for IOS upload
+- name : IOSUPLOAD
+  hosts: "all"
+  serial: 15
+  gather_facts: false
+
+  vars_prompt:
+    - name: newOS
+      prompt: "Full image filename"
+      private: no
+
+    - name: md5
+      prompt: "Md5 value"
+      private: no
+
+    - name: size
+      prompt: "Size of file in kbps"
+      private: no
+
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: ios
+    ansible_ssh_user: "{{ u }}"
+    ansible_ssh_pass: "{{ p }}"
+
+  roles:
+    - iosUpload
