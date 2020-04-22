@@ -13,9 +13,9 @@
   ios_command:
     commands:
       - "reload\ny\n"
-
-- name: Wait for device to come up
-
+      
+- name: Wait for device to come up [ Default 600 seconds]
+  wait_for_connection:
 
 - name: OBTAIN IOS FACTS
   ios_facts:
