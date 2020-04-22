@@ -7,7 +7,7 @@ Script is split into 2 sections:
 
 STEPS Involved:
 UPLOAD :
-#Step 1: Ontain IOS Facts
+#Step 1: Obtain IOS Facts
 #Step 2: Print out device model
 #Step 3: Print out current running IOS image
 #Step 4: Check new IOS != Old IOS. FAIL if newIOS == oldIOS.
