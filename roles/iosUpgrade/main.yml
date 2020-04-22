@@ -1,0 +1,38 @@
+---
+#Tasks for IOS Upgrade
+#Step 1: Save configs
+#Step 2: Reload Device
+#Step 3: Wait for device to come up.
+#Step 4: Print out running OS Image
+#Step 5: Confirm success/fail of upgrade.
+- name: Save running-configs to start-up configs
+  ios_config:
+    save_when: always
+
+- name: Reload/Restart device
+  ios_command:
+    commands:
+      - "reload\ny\n"
+
+- name: Wait for device to come up
+
+
+- name: OBTAIN IOS FACTS
+  ios_facts:
+  register: x
+
+- name: Set Facts
+  set_fact:
+    aa: x.ansible_facts.ansible_net_image
+    yy: newOS
+
+- name: Print out current IOS Image
+  debug:
+    var: x.ansible_facts.ansible_net_image
+
+- name: Check current OS == newOS
+  assert:
+    that:
+      - "{{ yy }} in {{ aa }}"
+    fail_msg: "FAIL : Device not upgraded to new OS"
+    success_msg: "PASS: Devide upgraded to new OS"
