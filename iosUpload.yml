@@ -3,23 +3,11 @@
 #!/usr/tools/pyenv/shims/ansible-playbook
 ---
 #Ansible script for IOS upload
-- name : IOSUPLOAD
+#Split into 2 to get around the closure of sockets after long upload durations
+- name : IOSUPLOAD - Check file validity then upload
   hosts: "all"
-  serial: 15
+  serial: 4
   gather_facts: false
-
-  vars_prompt:
-    - name: newOS
-      prompt: "Full image filename"
-      private: no
-
-    - name: md5
-      prompt: "Md5 value"
-      private: no
-
-    - name: size
-      prompt: "Size of file in kbps"
-      private: no
 
   vars:
     ansible_connection: network_cli
@@ -29,3 +17,18 @@
 
   roles:
     - iosUpload
+
+- name : md5Check - Verify file integrity
+  hosts: "all"
+  serial: 15
+  gather_facts: false
+
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: ios
+    ansible_ssh_user: "{{ u }}"
+    ansible_ssh_pass: "{{ p }}"
+
+  roles:
+    - md5Check
+
