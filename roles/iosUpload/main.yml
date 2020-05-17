@@ -1,4 +1,15 @@
 ---
+#Tasks for IOS Upload
+#STEP 1 : Upload the variables. Variables written on the file by Python script.These are IOS Image name,calculated md5 value and size.
+#STEp 2 : Confirm if device uses bootflash or flash.
+#STEP 3 : Confirm for user the Device Model & Currently used IOS Image.
+#STEP 4 : Confirm the new IOS image is not already in used  **Fail device out of play if IOS already in use **
+#STEP 5 : Check validity of the IOS image. Checks the first 10 characters of name and compares to what is already in use.
+#STEP 6 : Active SCP Server in device.
+#STEP 7 : Confirm the available flash or bootflash space is large enough to take in new file.
+#STEP 8 : Upload the file
+#STEP 9 : Check uploaded file integrity : Verify md5 value
+
 - include_vars: modules/iosVars.yml
 
 - name: OBTAIN IOS FACTS
@@ -50,7 +61,6 @@
     commands:
       - ip scp server enable
 
-
 - name: Check space if with bootflash [Skip if bootflash is ABSENT ]
   block:
     - name: Print out available space [Skip if bootflash is ABSENT ]
@@ -67,13 +77,8 @@
     - name: Upload Image to device from images/.. directory [Skipping if bootflash is ABSENT]
       connection: network_cli
       net_put:
-        src: "images/{{ newOS }}"   #images folder to contain the image file.
+        src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
         dest: "bootflash:{{ newOS }}"
-
-    - name: Confirm copied file integrity . Compare MD5SUM [Skipping if bootflash is ABSENT]
-      ios_command:
-        commands:
-          - verify /md5 "bootflash:{{ newOS }}" {{ md5 }}
 
   when:
     - ff in a.stdout[0]
@@ -84,18 +89,22 @@
       debug:
         var: "{{ memF }}"
 
-    - name: Assert that available space > image size [ Skipping if bootflash is PRESENT]
+    - name: Assert that available space > image size [Skipping if bootflash is ABSENT]
       assert:
         that:
           - "{{ memF }} > {{ size }}"
-
         fail_msg: "FAIL - Not enough space available for upload"
         success_msg: "PASS - Enough space available for upload"
 
     - name: Upload Image to device from images/.. directory [Skip if bootflash is PRESENT]
       net_put:
-        src: "images/{{ newOS }}"   #images folder to contain the image file.
+        src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
         dest: "flash:{{ newOS }}"
 
   when:
     - ff not in a.stdout[0]
+    
+- name: Perfom MD5 checks
+  ios_command:
+    commands:
+      - verify /md5 "flash:{{ newOS }}" "{{ md5 }}"
