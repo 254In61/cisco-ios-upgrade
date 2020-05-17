@@ -1,0 +1,118 @@
+panther@blackpanther % ./iosUpload.sh
+IOS Upload process starting......
+New IOS Image .bin filename?:c800-universalk9-mz.SPA.156-3.M6a.bin
+Print out of recorded IOS Variables ....
+==========================================
+---
+newOS: c800-universalk9-mz.SPA.156-3.M6a.bin
+md5: 94c8b56da7456124f817b61fa02974a5
+zz: c800-unive
+ff: bootflash
+size: 94679
+==========================================
+
+Vault password:
+
+PLAY [IOSUPLOAD - Check file validity then upload] ********************************************************************************************************************
+
+TASK [iosUpload : include_vars] ***************************************************************************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+TASK [iosUpload : OBTAIN IOS FACTS] ***********************************************************************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+TASK [iosUpload : Check if flash or bootflash] ************************************************************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+TASK [iosUpload : Create variable for memory space [Skip if bootflash is ABSENT]] *************************************************************************************
+skipping: [prodRouter-01]
+skipping: [prodRouter-02]
+
+TASK [iosUpload : Create variable for memory space. [Skipping if bootlash is PRESENT]] ********************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+TASK [iosUpload : Print out device model] *****************************************************************************************************************************
+ok: [prodRouter-01] => {
+    "x.ansible_facts.ansible_net_model": "C891F-K9"
+}
+ok: [prodRouter-02] => {
+    "x.ansible_facts.ansible_net_model": "C891F-K9"
+}
+
+TASK [iosUpload : Print out current used IOS image] *******************************************************************************************************************
+ok: [prodRouter-01] => {
+    "x.ansible_facts.ansible_net_image": "flash:c800-universalk9-mz.SPA.154-3.M4.bin"
+}
+ok: [prodRouter-02] => {
+    "x.ansible_facts.ansible_net_image": "flash:c800-universalk9-mz.SPA.154-3.M4.bin"
+}
+
+TASK [iosUpload : Check newOS == oldOS [FAIL Out Device if newOS already used]] ***************************************************************************************
+ok: [prodRouter-01] => {
+    "changed": false,
+    "msg": "newOS != OldOS. Checks to continue"
+}
+ok: [prodRouter-02] => {
+    "changed": false,
+    "msg": "newOS != OldOS. Checks to continue"
+}
+
+TASK [iosUpload : Check validity of new OS Image on Device [ Check first 8 characters of file name]] ******************************************************************
+ok: [prodRouter-01] => {
+    "changed": false,
+    "msg": "PASS - New OS Image confirmed valid for device"
+}
+ok: [prodRouter-02] => {
+    "changed": false,
+    "msg": "PASS - New OS Image confirmed valid for device"
+}
+
+TASK [iosUpload : Activate CI SCP Server feature[Skipping if NO bootflash]] *******************************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+TASK [iosUpload : Print out available space [Skip if bootflash is ABSENT ]] *******************************************************************************************
+skipping: [prodRouter-01]
+skipping: [prodRouter-02]
+
+TASK [iosUpload : Assert that available space > image size [Skipping if bootflash is ABSENT]] *************************************************************************
+skipping: [prodRouter-01]
+skipping: [prodRouter-02]
+
+TASK [iosUpload : Upload Image to device from images/.. directory [Skipping if bootflash is ABSENT]] ******************************************************************
+skipping: [prodRouter-01]
+skipping: [prodRouter-02]
+
+TASK [iosUpload : Print out available space [Skip if bootflash is PRESENT]] *******************************************************************************************
+ok: [prodRouter-01] => {
+    "x.ansible_facts[\"ansible_net_filesystems_info\"][\"flash:\"][\"spacefree_kb\"]": "173392"
+}
+ok: [prodRouter-02] => {
+    "x.ansible_facts[\"ansible_net_filesystems_info\"][\"flash:\"][\"spacefree_kb\"]": "102392"
+}
+
+TASK [iosUpload : Assert that available space > image size [Skipping if bootflash is ABSENT]] *************************************************************************
+ok: [prodRouter-01] => {
+    "changed": false,
+    "msg": "PASS - Enough space available for upload"
+}
+ok: [prodRouter-02] => {
+    "changed": false,
+    "msg": "PASS - Enough space available for upload"
+}
+
+TASK [iosUpload : Upload Image to device from images/.. directory [Skip if bootflash is PRESENT]] *********************************************************************
+changed: [prodRouter-01]
+changed: [prodRouter-02]
+
+TASK [random : Perfom MD5 checks] *************************************************************************************************************************************
+ok: [prodRouter-01]
+ok: [prodRouter-02]
+
+PLAY RECAP ************************************************************************************************************************************************************
+prodRouter-01        : ok=12   changed=1    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0
+prodRouter-02        : ok=12   changed=1    unreachable=0    failed=0    skipped=4    rescued=0    ignored=0
