@@ -1,20 +1,14 @@
 ---
-#Tasks for IOS Upload
-#STEP 1 : Upload the variables. Variables written on the file by Python script.These are IOS Image name,calculated md5 value and size.
-#STEp 2 : Confirm if device uses bootflash or flash.
-#STEP 3 : Confirm for user the Device Model & Currently used IOS Image.
-#STEP 4 : Confirm the new IOS image is not already in used  **Fail device out of play if IOS already in use **
-#STEP 5 : Check validity of the IOS image. Checks the first 10 characters of name and compares to what is already in use.
-#STEP 6 : Active SCP Server in device.
-#STEP 7 : Confirm the available flash or bootflash space is large enough to take in new file.
-#STEP 8 : Upload the file
-#STEP 9 : Check uploaded file integrity : Verify md5 value
-
-- include_vars: modules/iosVars.yml
-
-- name: OBTAIN IOS FACTS
+#- Collect ios facts
+#- Check if device uses flash or bootflash
+#- Confirm device does not use the new IOS
+#- Confirm new IOS image is valid for the device[Compare first 8 characters of file name
+#- Delete atleast 1 unused .bin files.
+#- Confirm enough space for new ios image upload
+#- Upload IOS Image
+- name: Collect IOS Facts
   ios_facts:
-  register: x
+  register: f
 
 - name: Check if flash or bootflash
   ios_command:
@@ -24,87 +18,106 @@
 
 - name: Create variable for memory space [Skip if bootflash is ABSENT]
   set_fact:
-    memB: x.ansible_facts["ansible_net_filesystems_info"]["bootflash:"]["spacefree_kb"]
+    memB: f.ansible_facts["ansible_net_filesystems_info"]["bootflash:"]["spacefree_kb"]
   when:
-    - ff in a.stdout[0]
+    - bf in a.stdout[0]
 
 - name: Create variable for memory space. [Skipping if bootlash is PRESENT]
   set_fact:
-    memF: x.ansible_facts["ansible_net_filesystems_info"]["flash:"]["spacefree_kb"]
+    memF: f.ansible_facts["ansible_net_filesystems_info"]["flash:"]["spacefree_kb"]
   when:
-    - ff not in a.stdout[0]
-
-- name: Print out device model
-  debug:
-    var: x.ansible_facts.ansible_net_model
-
-- name: Print out current used IOS image
-  debug:
-    var: x.ansible_facts.ansible_net_image
+    - bf not in a.stdout[0]
 
 - name: Check newOS == oldOS [FAIL Out Device if newOS already used]
   assert:
     that:
-      - newOS not in x.ansible_facts.ansible_net_image
+      - newOS not in f.ansible_facts.ansible_net_image
     fail_msg: "newOS == OldOS. Stopping checks on the device"
     success_msg: "newOS != OldOS. Checks to continue"
 
 - name: Check validity of new OS Image on Device [ Check first 8 characters of file name]
   assert:
     that:
-      - zz in x.ansible_facts.ansible_net_image
+      - zz in f.ansible_facts.ansible_net_image
     fail_msg: "FAIL- New OS Image invalid for device"
     success_msg: "PASS - New OS Image confirmed valid for device"
+
+- name: Check current .bin files in Flash
+  ios_command:
+    commands: "show flash: | inc .bin"
+  register: bin
+
+- name: Set Variables
+  set_fact:
+    bin1: "{{ bin.stdout_lines[0][0] }}"
+    bin2: "{{ bin.stdout_lines[0][1] }}"
+
+#Deleting unused .bin image files
+- name: Clean Up .bin images not in use
+  block:
+    - name: Clean Up unused Image number 1 [Skip if image in use]
+      ios_command:
+        commands:
+          - command: "delete flash:{{ bin1.split()[-1]}}\n\n"
+
+    - debug:
+        msg: "Deleted .bin image = {{ bin1.split()[-1] }}"
+
+  when:
+    - bin1.split()[-1] not in f.ansible_facts.ansible_net_image
+
+- name: Clean up .bin image number 2 not in use.
+  block:
+    - name: Clean up unused image number 2 [Skip if image in use]
+      ios_command:
+        commands:
+          - command: "delete flash:{{ bin2.split()[-1]}}\n\n"
+
+    - debug:
+        msg: "Deleted .bin image = {{ bin2.split()[-1] }}"
+
+  when:
+    - bin2.split()[-1] not in f.ansible_facts.ansible_net_image
+
+
+- name: Assert that available space > image size [Skipping if bootflash is ABSENT]
+  assert:
+    that:
+      - "{{ memB }} > {{ size }}"
+    fail_msg: "FAIL - Not enough space available for upload"
+    success_msg: "PASS - Enough space available for upload"
+
+  when:
+    - bf in a.stdout[0]
+
+- name: Assert that available space > image size [Skipping if bootflash is ABSENT]
+  assert:
+    that:
+      - "{{ memF }} > {{ size }}"
+    fail_msg: "FAIL - Not enough space available for upload"
+    success_msg: "PASS - Enough space available for upload"
+
+  when:
+    - bf not in a.stdout[0]
 
 - name: Activate CI SCP Server feature[Skipping if NO bootflash]
   ios_config:
     commands:
       - ip scp server enable
 
-- name: Check space if with bootflash [Skip if bootflash is ABSENT ]
-  block:
-    - name: Print out available space [Skip if bootflash is ABSENT ]
-      debug:
-        var: "{{ memB }}"
-    #This simply means you are getting the keys from the dictionaries
-    - name: Assert that available space > image size [Skipping if bootflash is ABSENT]
-      assert:
-        that:
-          - "{{ memB }} > {{ size }}"
-        fail_msg: "FAIL - Not enough space available for upload"
-        success_msg: "PASS - Enough space available for upload"
-
-    - name: Upload Image to device from images/.. directory [Skipping if bootflash is ABSENT]
-      connection: network_cli
-      net_put:
-        src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
-        dest: "bootflash:{{ newOS }}"
+- name: Upload Image to device from images/.. directory [Skipping if bootflash is ABSENT]
+  net_put:
+    src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
+    dest: "bootflash:{{ newOS }}"
 
   when:
-    - ff in a.stdout[0]
+    - bf in a.stdout[0]
 
-- name: Check space if with flash [Skip if bootflash is PRESENT]
-  block:
-    - name: Print out available space [Skip if bootflash is PRESENT]
-      debug:
-        var: "{{ memF }}"
-
-    - name: Assert that available space > image size [Skipping if bootflash is ABSENT]
-      assert:
-        that:
-          - "{{ memF }} > {{ size }}"
-        fail_msg: "FAIL - Not enough space available for upload"
-        success_msg: "PASS - Enough space available for upload"
-
-    - name: Upload Image to device from images/.. directory [Skip if bootflash is PRESENT]
-      net_put:
-        src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
-        dest: "flash:{{ newOS }}"
+- name: Upload Image to device from images/.. directory [Skip if bootflash is PRESENT]
+  net_put:
+    src: "/home/source/upload/{{ newOS }}"   #images folder to contain the image file.
+    dest: "flash:{{ newOS }}"
 
   when:
-    - ff not in a.stdout[0]
-    
-- name: Perfom MD5 checks
-  ios_command:
-    commands:
-      - verify /md5 "flash:{{ newOS }}" "{{ md5 }}"
+   - bf not in a.stdout[0]
+
