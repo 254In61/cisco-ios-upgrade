@@ -1,7 +1,0 @@
----
-- include_vars: modules/iosVars.yml
-
-- name: Perfom MD5 checks
-  ios_command:
-    commands:
-      - verify /md5 "flash:{{ newOS }}" "{{ md5 }}"
