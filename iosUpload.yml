@@ -142,10 +142,6 @@
       vars:
         ansible_command_timeout: 300
 
-    - name: save running to startup config
-      ios_config:
-        save_when: always
-
     - name: BackUp current configurations to external file
       ios_config:
         backup: yes
@@ -175,6 +171,10 @@
 
     - debug:
         var: boot.stdout[0]
+        
+    - name: save running to startup config
+      ios_config:
+        save_when: always
 
     - debug:
         msg: "Device ready for reboot for upgrade"
