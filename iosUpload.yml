@@ -1,34 +1,183 @@
-----
-#This is the pre-implementation step.
-#!/usr/tools/pyenv/shims/ansible-playbook
 ---
-#Ansible script for IOS upload
-#Split into 2 to get around the closure of sockets after long upload durations
-- name : IOSUPLOAD - Check file validity then upload
+#Ansible script for Cisco IOS/XE upload
+#This is just for uploading phase
+
+#STEPS
+#- Within local host : a) Confirm file exists >> Read file stats >> Know file md5 value >>Know file size 
+#- Collect ios facts
+#- Check if device uses flash or bootflash
+#- Confirm device does not use the new IOS
+#- Confirm new IOS image is valid for the device[Compare first 8 characters of file name
+#- Confirm enough space for new ios image upload
+#- Upload IOS Image
+
+- name: FILE CHECKS
+  hosts: localhost
+  gather_facts: false
+
+  vars_prompt:
+    - name: newImage
+      prompt: "IOS system Image full name"
+      private: no
+
+  tasks:
+    - name: Obtain Image file details  #Assumption = md5sum of downloaded image is the correct value.
+      stat:
+        path: "/home/source/upload/{{ newImage }}"
+        checksum_algorithm: md5
+      register: statistics
+
+    - name: Confirm file exists[Fails if file is missing]
+      assert:
+        that:
+          - statistics.stat.exists == true
+        fail_msg: "FAIL - File does not exist in FTP/TFTP server or directory"
+        success_msg: "PASS- IOS File confirmed present"
+
+    - name: Prepare filename variable for next play
+      set_fact:
+        iosImage: "{{ newImage }}"
+
+
+- name : IOS UPLOAD
   hosts: "all"
-  serial: 4
+  serial: 10
   gather_facts: false
 
   vars:
     ansible_connection: network_cli
     ansible_network_os: ios
-    ansible_ssh_user: "{{ u }}"
-    ansible_ssh_pass: "{{ p }}"
+    bootFlash: bootflash  #Variable that will be used to check if bootflash or flash is used in the device.
 
-  roles:
-    - iosUpload
+  tasks:
+    - name: Set Variables
+      set_fact:
+        md5Value: "{{ hostvars['localhost']['statistics']['stat']['checksum'] }}"
+        fileSize: "{{ hostvars['localhost']['statistics']['stat']['size'] }}"
+        newOS: "{{ hostvars['localhost']['iosImage'] }}"
 
-- name : md5Check - Verify file integrity
-  hosts: "all"
-  serial: 15
-  gather_facts: false
+    - name: Collect IOS Facts
+      ios_facts:
+      register: iosFacts
 
-  vars:
-    ansible_connection: network_cli
-    ansible_network_os: ios
-    ansible_ssh_user: "{{ u }}"
-    ansible_ssh_pass: "{{ p }}"
+    - debug:
+        msg: "CURRENT IOS IMAGE = {{ iosFacts.ansible_facts.ansible_net_image }}"
 
-  roles:
-    - md5Check
+    - name: Check validity of IOS Image [ Compare first 10 characters of current IOS name and new IOS name]
+      assert:
+        that:
+          - newOS[:10] in iosFacts.ansible_facts.ansible_net_image
+        fail_msg: "FAIL- New OS Image invalid for device"
+        success_msg: "PASS - New OS Image confirmed valid for device"
+
+    - name: Check newOS == oldOS [FAIL Out Device if newOS already used]
+      assert:
+        that:
+          - newOS not in iosFacts.ansible_facts.ansible_net_image
+        fail_msg: "newOS == OldOS. Stopping checks on the device"
+        success_msg: "newOS != OldOS. Checks to continue"
+
+    - name: Check if flash or bootflash #Confirm whether flash or bootflash is used in the device.
+      ios_command:
+        commands: show file systems | inc flash
+
+      register: storage_type
+
+    - name: Activate CI SCP Server feature
+      ios_config:
+        commands:
+          - ip scp server enable
+
+    - name: DEVICES WITH BOOTFLASH FOR STORAGE #Block to process devices with Bootflash for storage.
+      block:
+        - name: Create variable for memory space [Skipping if using flash]
+          set_fact:
+            memSize: iosFacts.ansible_facts["ansible_net_filesystems_info"]["bootflash:"]["spacefree_kb"]
+
+        - name: Confirm device has enough bootflash memory space before transfer [Skipping if using flash]
+          assert:
+            that:
+              - "{{ memSize }} > {{ fileSize|float * 0.001 }}" #stat module reads size as bps and iosfacts reads free space as kbps.
+            fail_msg: "FAIL - Not enough space available for upload"
+            success_msg: "PASS - Enough space available for upload"
+
+        - name: Upload Image to device from /home/source/upload/**.. directory [Skipping if using flash]
+          net_put:
+            src: "/home/source/upload/{{ newOS }}"   #Directory that contains the image files.
+            dest: "bootflash:{{ newOS }}"
+          vars:
+            ansible_command_timeout: 3600  #Put to 1 hr to take care of large files on possible slow links
+
+      when:
+        - bootFlash in storage_type.stdout[0]
+
+    - name: DEVICES USING FLASH FOR STORAGE
+      block:
+        - name: Create variable for memory space. [Skipping if using bootflash]
+          set_fact:
+            memSize: iosFacts.ansible_facts["ansible_net_filesystems_info"]["flash:"]["spacefree_kb"] #Some devices like Cisco 3945 Chassis will be flash0:
+
+        - name: Confirm device has enough flash memory space before transfer [Skipping if using bootflash]
+          assert:
+            that:
+              - "{{ memSize }} > {{ fileSize|float * 0.001 }}" #stat module reads size as bps and iosfacts reads free space as kbps.
+            fail_msg: "FAIL - Not enough space available for upload"
+            success_msg: "PASS - Enough space available for upload"
+
+        - name: Upload Image to device from /home/source/upload/**.. directory [Skipping if using bootflash]
+          net_put:
+            src: "/home/source/upload/{{ newOS }}"   #Directory that contains the image files
+            dest: "flash:{{ newOS }}"
+          vars:
+            ansible_command_timeout: 3600 #Put to 1 hr to take care of large files on possible slow links
+
+      when:
+        - bootFlash not in storage_type.stdout[0]
+    
+    - name: Perfom MD5 checks #If having challenges with socket closure because of long IOS upload time, you can start this section as a new play.
+      ios_command:
+        commands:
+          - "verify /md5 flash:{{ newOS }} {{ md5Value }}"
+
+      vars:
+        ansible_command_timeout: 300
+
+    - name: save running to startup config
+      ios_config:
+        save_when: always
+
+    - name: BackUp current configurations to external file
+      ios_config:
+        backup: yes
+        backup_options:
+          filename: "{{ inventory_hostname }}_backup.cfg"
+          dir_path: files
+
+    - name: Check current boot system
+      ios_command:
+        commands: show run | inc boot system
+      register: boot
+
+    - debug:
+        var: boot.stdout[0]
+
+    - name: Change boot system
+      ios_config:
+        commands:
+          - no boot system
+          - "boot system flash:{{ newOS }}"
+          - "boot system {{ iosFacts.ansible_facts.ansible_net_image }}"
+
+    - name: Confirm boot system correctly done
+      ios_command:
+        commands: show run | inc boot system
+      register: boot
+
+    - debug:
+        var: boot.stdout[0]
+
+    - debug:
+        msg: "Device ready for reboot for upgrade"
+
+    
 
