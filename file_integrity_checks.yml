@@ -1,0 +1,29 @@
+---
+- name: Set variables for integrity checks
+  set_fact:
+    new_image: "{{ hostvars['localhost']['image_name'] }}"
+    md5_value: "{{ hostvars['localhost']['image_info']['json']['originalChecksums']['md5'] }}"
+
+- name: Perfom File Integrity checks
+  ios_command:
+    commands: "verify /md5 flash:{{ new_image }}"
+  register: uploaded_file_md5
+  vars:
+    ansible_command_timeout: 300
+
+# - debug: 
+    # var: uploaded_file_md5['stdout'][0]
+  
+# - debug:
+    # var: md5_value
+
+- name: Confirm that file md5 hash value is maintained
+  assert:
+    that: md5_value in uploaded_file_md5['stdout'][0]
+    success_msg: "Success.Uploaded image integrity confirmed"
+    fail_msg: "Fail.Uploaded image integrity failure"
+
+- debug:
+    msg: "PROCESS COMPLETED.Next steps 1)Change boot sequence. 2)Save running configs 3) Reload device"
+
+...
