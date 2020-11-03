@@ -1,0 +1,29 @@
+---
+- name: CHECK IMAGE VALIDITY >> CHECK FREE SPACE >> UPLOAD >> CONFIRM UPLOAD
+  hosts: "all"
+  gather_facts: false
+
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: ios
+
+  tasks:
+    - name: Set Variables for downloaded file. #You can extract these variables from file details on the source.
+      set_fact:
+        file_size: "{{ hostvars['localhost']['image_info']['json']['size'] }}"
+        new_image: "{{ hostvars['localhost']['image_name'] }}"
+    - include: upload_to_device.yml
+
+# Play 2: Check file integrity.
+# Re-opens new sockets if closed while waiting for iosupload of remaining hosts
+- name: CONFIRM FILE INTEGRITY 
+  hosts: "all"
+  serial: 10
+  gather_facts: false
+
+  vars:
+    ansible_connection: network_cli
+    ansible_network_os: ios
+
+  tasks:
+    - include: file_integrity_checks.yml
